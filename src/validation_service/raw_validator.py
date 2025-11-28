@@ -1,24 +1,20 @@
 from __future__ import annotations
-from pathlib import Path
 from typing import List, Dict, Any
 import pandas as pd
 
-from config_loader import load_yaml_config
-from file_utils import list_files, is_csv_file
+from file_utils import list_files, is_csv_file, load_yaml_config
 from report_writer import write_report
 from logger import get_logger
+from config_paths import *
 
 logger = get_logger(__name__)
 
-DEFAULT_LINE_NUMBER = ""
+EMPTY_STRING = ""
 
-def raw_validator(config_path: Path) -> None:
-    config = load_yaml_config(config_path)
-    raw_config = config.get('raw')
-    base_path = Path(raw_config.get('base_path', "src/files/raw"))
+def raw_validator(config_path: Path = RAW_CONFIG_PATH) -> None:
+    raw_config = load_yaml_config(config_path)
+    base_path = RAW_DATA_PATH
     folders_config = raw_config.get('folders')
-    report_folder = base_path / 'reports'
-    report_file = report_folder / 'report_raw_validation.csv'
 
     list_errors: List[Dict[str, Any]] = []
 
@@ -30,25 +26,24 @@ def raw_validator(config_path: Path) -> None:
                 {
                     "error_level": "error",
                     "error_text": f"Required folder {name} not found",
-                    "file_name": DEFAULT_LINE_NUMBER,
+                    "file_name": EMPTY_STRING,
                     "folder_name": str(folder_path),
-                    "line_number": DEFAULT_LINE_NUMBER
+                    "line_number": EMPTY_STRING
                 }
             )
         else:
             logger.info("Folder found:", folder_path)
 
             required_columns = folder.get('required_columns', [])
-            #patterns = folder.get('file_patterns', ["*.csv"])
             files = list(list_files(folder_path, ["*"]))
             if not files:
                 list_errors.append(
                     {
                         "error_level": "warning",
                         "error_text": f"Folder {name} doesn't contain any corresponding files",
-                        "file_name": DEFAULT_LINE_NUMBER,
+                        "file_name": EMPTY_STRING,
                         "folder_name": str(folder_path),
-                        "line_number": DEFAULT_LINE_NUMBER
+                        "line_number": EMPTY_STRING
                     }
                 )
                 continue
@@ -61,7 +56,7 @@ def raw_validator(config_path: Path) -> None:
                             "error_text": f"File {file_path.name} has unsupported format",
                             "file_name": file_path.name,
                             "folder_name": str(folder_path),
-                            "line_number": DEFAULT_LINE_NUMBER
+                            "line_number": EMPTY_STRING
                         }
                     )
                     continue
@@ -77,7 +72,7 @@ def raw_validator(config_path: Path) -> None:
                             "error_text": f'Failed to read CSV header {file_path.name}. Error: {e}',
                             "file_name": file_path.name,
                             "folder_name": str(folder_path),
-                            "line_number": DEFAULT_LINE_NUMBER
+                            "line_number": EMPTY_STRING
                         }
                     )
                     continue
@@ -94,12 +89,12 @@ def raw_validator(config_path: Path) -> None:
                                 "error_text": f'Required column {orig_req} is missing',
                                 "file_name": file_path.name,
                                 "folder_name": str(folder_path),
-                                "line_number": DEFAULT_LINE_NUMBER
+                                "line_number": EMPTY_STRING
                             }
                         )
 
-    write_report(list_errors, report_file, encoding = raw_config.get('encoding', 'utf-8'))
+    write_report(list_errors, REPORT_FILE_PATH, encoding = raw_config.get('encoding', 'utf-8'))
     logger.info(f'RAW validation completed. {len(list_errors)} errors/warnings found')
 
 if __name__ == "__main__":
-    raw_validator(Path("src/files/static/raw_config.yaml"))
+    raw_validator(RAW_CONFIG_PATH)

@@ -1,10 +1,9 @@
-from pathlib import Path
-from config_loader import load_yaml_config
-from logger import get_logger
+from file_utils import load_yaml_config
+from config_paths import RAW_CONFIG_PATH
 from raw_validator import raw_validator
 
 def main():
-    config_path = Path("src/files/static/raw_config.yaml")
+    config_path = RAW_CONFIG_PATH
 
     config = load_yaml_config(config_path)
     validator = raw_validator(config_path)
