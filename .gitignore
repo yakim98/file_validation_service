@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 .env
 .idea/
+src/files/raw/reports/
+src/files/source/reports/
