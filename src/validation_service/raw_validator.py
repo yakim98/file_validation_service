@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List, Dict, Any
-import pandas as pd
+import csv
 
 from file_utils import list_files, is_csv_file, load_yaml_config
 from report_writer import write_report
@@ -9,89 +9,127 @@ from config_paths import *
 
 logger = get_logger(__name__)
 
-EMPTY_STRING = ""
-
 def raw_validator(config_path: Path = RAW_CONFIG_PATH) -> None:
+    if not config_path.exists():
+        logger.error(f'Config file not found: {config_path}')
+        raise FileNotFoundError(f'Config file not found: {config_path}')
+
     raw_config = load_yaml_config(config_path)
     base_path = RAW_DATA_PATH
-    folders_config = raw_config.get('folders')
+    folders_config: List[Dict[str, Any]] = raw_config.get('folders')
+    if not isinstance(folders_config, list) or not folders_config:
+        logger.error('Config "folders" is missing or empty')
+        raise ValueError('Config "folders" must be a non-empty list')
 
     list_errors: List[Dict[str, Any]] = []
 
     for folder in folders_config:
+        if not isinstance(folder, dict):
+            logger.warning(f'Invalid folder config entry: {folder}')
+            continue
         name = folder.get('name')
+        if not name:
+            list_errors.append(
+                {
+                    "error_level": "error",
+                    "error_text": 'Folder "name" is missing in config',
+                    "file_name": "",
+                    "folder_name": "",
+                    "line_number": ""
+                }
+            )
+            continue
         folder_path = base_path / name
         if not folder_path.exists():
             list_errors.append(
                 {
                     "error_level": "error",
-                    "error_text": f"Required folder {name} not found",
-                    "file_name": EMPTY_STRING,
+                    "error_text": f"Required folder {name} is missing",
+                    "file_name": "",
                     "folder_name": str(folder_path),
-                    "line_number": EMPTY_STRING
+                    "line_number": ""
                 }
             )
         else:
-            logger.info("Folder found:", folder_path)
+            logger.info(f"Folder found: {folder_path}")
 
             required_columns = folder.get('required_columns', [])
+            if not isinstance(required_columns, list):
+                list_errors.append(
+                    {
+                        "error_level": "error",
+                        "error_text": f'Folder "{name}" has invalid or missing "required_columns"',
+                        "file_name": "",
+                        "folder_name": name,
+                        "line_number": ""
+                    }
+                )
+                continue
             files = list(list_files(folder_path, ["*"]))
             if not files:
                 list_errors.append(
                     {
                         "error_level": "warning",
-                        "error_text": f"Folder {name} doesn't contain any corresponding files",
-                        "file_name": EMPTY_STRING,
+                        "error_text": f"Folder {name} does not contain any file",
+                        "file_name": "",
                         "folder_name": str(folder_path),
-                        "line_number": EMPTY_STRING
+                        "line_number": ""
                     }
                 )
                 continue
 
             for file_path in files:
-                if not is_csv_file(file_path):
+                if not is_csv_file(file_path, encoding=raw_config.get("encoding", "utf-8")):
                     list_errors.append(
                         {
                             "error_level": "error",
                             "error_text": f"File {file_path.name} has unsupported format",
                             "file_name": file_path.name,
                             "folder_name": str(folder_path),
-                            "line_number": EMPTY_STRING
+                            "line_number": ""
                         }
                     )
                     continue
 
                 try:
-                    df = pd.read_csv(file_path, nrows=0)
-                    cols = list(df.columns)
-                except Exception as e:
-                    logger.exception(f'Failed to read CSV header {file_path}:', e)
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        reader = csv.reader(f)
+                        cols = next(reader)
+                except StopIteration:
+                    logger.exception(f'CSV file is empty: {file_path}')
                     list_errors.append(
                         {
                             "error_level": "error",
-                            "error_text": f'Failed to read CSV header {file_path.name}. Error: {e}',
+                            "error_text": f'CSV file is empty: {file_path.name}',
                             "file_name": file_path.name,
                             "folder_name": str(folder_path),
-                            "line_number": EMPTY_STRING
+                            "line_number": ""
                         }
                     )
                     continue
 
-                for i, req in enumerate(required_columns):
-                    if req not in cols:
-                        if i < len(required_columns):
-                            orig_req = required_columns[i]
-                        else:
-                            orig_req = req
-                        list_errors.append(
-                            {
-                                "error_level": "error",
-                                "error_text": f'Required column {orig_req} is missing',
-                                "file_name": file_path.name,
-                                "folder_name": str(folder_path),
-                                "line_number": EMPTY_STRING
-                            }
-                        )
+                except csv.Error:
+                    logger.exception(f'Failed to parse CSV header: {file_path}')
+                    list_errors.append(
+                        {
+                            "error_level": "error",
+                            "error_text": f'Failed to parse CSV header: {file_path.name}',
+                            "file_name": file_path.name,
+                            "folder_name": str(folder_path),
+                            "line_number": ""
+                        }
+                    )
+                    continue
+
+                missing_columns = set(required_columns) - set(cols)
+                for missing_col in missing_columns:
+                    list_errors.append({
+                        "error_level": "error",
+                        "error_text": f'Required column "{missing_col}" is missing',
+                        "file_name": file_path.name,
+                        "folder_name": str(folder_path),
+                        "line_number": ""
+                    })
 
     write_report(list_errors, REPORT_FILE_PATH, encoding = raw_config.get('encoding', 'utf-8'))
     logger.info(f'RAW validation completed. {len(list_errors)} errors/warnings found')
