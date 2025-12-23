@@ -1,32 +1,24 @@
 from __future__ import annotations
 from typing import List, Dict, Any
 import csv
+from pathlib import Path
 
 from file_utils import list_files, is_csv_file, load_yaml_config
 from report_writer import write_report
 from logger import get_logger
-from config_paths import *
 
 logger = get_logger(__name__)
 
-def raw_validator(config_path: Path = RAW_CONFIG_PATH) -> None:
-    if not config_path.exists():
-        logger.error(f'Config file not found: {config_path}')
-        raise FileNotFoundError(f'Config file not found: {config_path}')
+def raw_validator(raw_config: dict,
+                  base_path: Path,
+                  report_path: Path
+                  ) -> None:
 
-    raw_config = load_yaml_config(config_path)
-    base_path = RAW_DATA_PATH
     folders_config: List[Dict[str, Any]] = raw_config.get('folders')
-    if not isinstance(folders_config, list) or not folders_config:
-        logger.error('Config "folders" is missing or empty')
-        raise ValueError('Config "folders" must be a non-empty list')
 
     list_errors: List[Dict[str, Any]] = []
 
     for folder in folders_config:
-        if not isinstance(folder, dict):
-            logger.warning(f'Invalid folder config entry: {folder}')
-            continue
         name = folder.get('name')
         if not name:
             list_errors.append(
@@ -131,8 +123,5 @@ def raw_validator(config_path: Path = RAW_CONFIG_PATH) -> None:
                         "line_number": ""
                     })
 
-    write_report(list_errors, REPORT_FILE_PATH, encoding = raw_config.get('encoding', 'utf-8'))
+    write_report(list_errors, report_path, encoding=raw_config.get('encoding', 'utf-8'))
     logger.info(f'RAW validation completed. {len(list_errors)} errors/warnings found')
-
-if __name__ == "__main__":
-    raw_validator(RAW_CONFIG_PATH)

@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 import csv
 from logger import get_logger
+from .config_paths import CSV_SAMPLE_SIZE
 
 logger = get_logger(__name__)
 
@@ -23,7 +24,7 @@ def is_csv_file(path: Path, encoding: str = "utf-8") -> bool:
 
     try:
         with open(path, "r", encoding=encoding, newline="") as f:
-            sample = f.read(4096)
+            sample = f.read(CSV_SAMPLE_SIZE)
             if not sample.strip():
                 return False
 
@@ -34,10 +35,6 @@ def is_csv_file(path: Path, encoding: str = "utf-8") -> bool:
         return False
 
 def load_yaml_config(path: Path):
-    try:
-        with open(path, 'r') as file:
-            config = yaml.safe_load(file)
-            return config
-    except FileNotFoundError:
-        logger.error(f"Config file file not found: {path}")
-        raise
+    with open(path, 'r') as file:
+        config = yaml.safe_load(file)
+        return config
