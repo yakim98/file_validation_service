@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Iterable, Dict, Any
 import csv
 
-from logger import get_logger
+from .logger import get_logger
 
 logger = get_logger(__name__)
 

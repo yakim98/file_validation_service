@@ -3,7 +3,9 @@ import fnmatch
 from pathlib import Path
 import yaml
 import csv
-from logger import get_logger
+from datetime import datetime
+from .logger import get_logger
+from .config_paths import CSV_SAMPLE_SIZE
 
 logger = get_logger(__name__)
 
@@ -23,7 +25,7 @@ def is_csv_file(path: Path, encoding: str = "utf-8") -> bool:
 
     try:
         with open(path, "r", encoding=encoding, newline="") as f:
-            sample = f.read(4096)
+            sample = f.read(CSV_SAMPLE_SIZE)
             if not sample.strip():
                 return False
 
@@ -34,10 +36,28 @@ def is_csv_file(path: Path, encoding: str = "utf-8") -> bool:
         return False
 
 def load_yaml_config(path: Path):
-    try:
-        with open(path, 'r') as file:
+    with open(path, 'r') as file:
             config = yaml.safe_load(file)
             return config
-    except FileNotFoundError:
-        logger.error(f"Config file file not found: {path}")
-        raise
+
+def validate_type(value: str, expected_type: str) -> bool:
+    if value is None or value == '':
+        return False
+    try:
+        if expected_type.lower() in ('str', 'string', 'text'):
+            str(value)
+            return True
+        elif expected_type.lower() in ('int', 'integer'):
+            int(value)
+            return True
+        elif expected_type.lower() in ('float', 'double', 'decimal'):
+            float(value)
+            return True
+        elif expected_type.lower() == "date":
+            datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            return True
+        else:
+            logger.warning(f'Unknown data type: {expected_type}')
+            return False
+    except (ValueError, AttributeError):
+        return False
